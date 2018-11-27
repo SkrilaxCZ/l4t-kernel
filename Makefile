@@ -19,9 +19,10 @@ $(foreach overlay,$(KERNEL_OVERLAYS),$(eval $(value set_srctree_overlay)))
 
 VERSION = 4
 PATCHLEVEL = 9
-SUBLEVEL = 140
+SUBLEVEL = 141
 EXTRAVERSION =
 NAME = Roaring Lionus
+
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
