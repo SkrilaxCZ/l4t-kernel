@@ -260,10 +260,8 @@ static size_t ramoops_write_kmsg_hdr(struct persistent_ram_zone *prz,
 		compressed ? 'C' : 'D');
 	WARN_ON_ONCE(!hdr);
 	len = hdr ? strlen(hdr) : 0;
-	if (hdr) {
-		persistent_ram_write(prz, hdr, len);
-		kfree(hdr);
-	}
+	persistent_ram_write(prz, hdr, len);
+	kfree(hdr);
 
 	return len;
 }
@@ -561,12 +559,6 @@ static int ramoops_parse_dt(struct platform_device *pdev,
 #undef parse_size
 
 	return 0;
-}
-
-void notrace ramoops_console_write_buf(const char *buf, size_t size)
-{
-	struct ramoops_context *cxt = &oops_cxt;
-	persistent_ram_write(cxt->cprz, buf, size);
 }
 
 static int ramoops_probe(struct platform_device *pdev)

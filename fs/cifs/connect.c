@@ -57,10 +57,6 @@
 #include "smb2proto.h"
 #endif
 
-#ifdef CONFIG_CIFS_SYSFS
-#include "sysfs.h"
-#endif
-
 #define CIFS_PORT 445
 #define RFC1001_PORT 139
 
@@ -377,10 +373,6 @@ cifs_reconnect(struct TCP_Server_Info *server)
 	struct cifs_tcon *tcon;
 	struct mid_q_entry *mid_entry;
 	struct list_head retry_list;
-#ifdef CONFIG_CIFS_SYSFS
-	bool notify_reconnect_error = true;
-	int reconnect_error_count = 0;
-#endif
 
 	spin_lock(&GlobalMid_Lock);
 	if (server->tcpStatus == CifsExiting) {
@@ -397,9 +389,6 @@ cifs_reconnect(struct TCP_Server_Info *server)
 #endif
 
 	cifs_dbg(FYI, "Reconnecting tcp session\n");
-#ifdef CONFIG_CIFS_SYSFS
-	cifs_sysfs_notify_change(server->hostname, RECONNECTING);
-#endif
 
 	/* before reconnecting the tcp session, mark the smb session (uid)
 		and the tid bad so they are not used until reconnected */
@@ -463,15 +452,6 @@ cifs_reconnect(struct TCP_Server_Info *server)
 		mutex_lock(&server->srv_mutex);
 		rc = generic_ip_connect(server);
 		if (rc) {
-#ifdef CONFIG_CIFS_SYSFS
-			if (notify_reconnect_error) {
-				if (reconnect_error_count == 2) {
-					cifs_sysfs_notify_change(server->hostname, RECONNECT_ERROR);
-					notify_reconnect_error = false;
-				}
-				reconnect_error_count++;
-			}
-#endif
 			cifs_dbg(FYI, "reconnect error %d\n", rc);
 			rc = reconn_set_ipaddr(server);
 			if (rc) {
@@ -481,9 +461,6 @@ cifs_reconnect(struct TCP_Server_Info *server)
 			mutex_unlock(&server->srv_mutex);
 			msleep(3000);
 		} else {
-#ifdef CONFIG_CIFS_SYSFS
-			cifs_sysfs_notify_change(server->hostname, RECONNECTED);
-#endif
 			atomic_inc(&tcpSesReconnectCount);
 			spin_lock(&GlobalMid_Lock);
 			if (server->tcpStatus != CifsExiting)
@@ -1290,12 +1267,10 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 	char *string = NULL;
 	char *tmp_end, *value;
 	char delim;
-	char comma;
 	bool got_ip = false;
 	unsigned short port = 0;
 	struct sockaddr *dstaddr = (struct sockaddr *)&vol->dstaddr;
 
-	comma = 0x01;
 	separator[0] = ',';
 	separator[1] = 0;
 	delim = separator[0];
@@ -1802,18 +1777,11 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 			}
 
 			for (i = 0, j = 0; i < temp_len; i++, j++) {
-				if (value[i] == comma) {
-				/* Replace the special comma char
-				* with an actual comma, then skip.*/
-					vol->password[j] = ',';
-				} else {
 				vol->password[j] = value[i];
 				if ((value[i] == delim) &&
-					value[i+1] == delim) {
-				/* skip the second deliminator */
+				     value[i+1] == delim)
+					/* skip the second deliminator */
 					i++;
-					}
-				}
 			}
 			vol->password[j] = '\0';
 			break;
@@ -2535,7 +2503,7 @@ cifs_set_cifscreds(struct smb_vol *vol, struct cifs_ses *ses)
 	}
 
 	down_read(&key->sem);
-	upayload = user_key_payload_locked(key);
+	upayload = user_key_payload(key);
 	if (IS_ERR_OR_NULL(upayload)) {
 		rc = upayload ? PTR_ERR(upayload) : -EINVAL;
 		goto out_key_put;
@@ -2777,9 +2745,6 @@ cifs_put_tcon(struct cifs_tcon *tcon)
 		ses->server->ops->tree_disconnect(xid, tcon);
 	_free_xid(xid);
 
-#ifdef CONFIG_CIFS_SYSFS
-	cifs_sysfs_notify_change(tcon->treeName, DISCONNECTED);
-#endif
 	cifs_fscache_release_super_cookie(tcon);
 	tconInfoFree(tcon);
 	cifs_put_smb_ses(ses);
@@ -2832,10 +2797,6 @@ cifs_get_tcon(struct cifs_ses *ses, struct smb_vol *volume_info)
 	cifs_dbg(FYI, "Tcon rc = %d\n", rc);
 	if (rc)
 		goto out_fail;
-
-#ifdef CONFIG_CIFS_SYSFS
-	cifs_sysfs_notify_change(tcon->treeName, CONNECTED);
-#endif
 
 	if (volume_info->nodfs) {
 		tcon->Flags &= ~SMB_SHARE_IS_IN_DFS;
@@ -3655,7 +3616,7 @@ cifs_setup_volume_info(struct smb_vol *volume_info, char *mount_data,
 	} else if (volume_info->username) {
 		/* BB fixme parse for domain name here */
 		cifs_dbg(FYI, "Username: %s\n", volume_info->username);
-    } else {
+	} else {
 		cifs_dbg(VFS, "No username specified\n");
 	/* In userspace mount helper we can get user name from alternate
 	   locations such as env variables and files on disk */

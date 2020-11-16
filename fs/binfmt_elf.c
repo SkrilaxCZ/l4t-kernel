@@ -1500,7 +1500,7 @@ static int fill_psinfo(struct elf_prpsinfo *psinfo, struct task_struct *p,
 {
 	const struct cred *cred;
 	unsigned int i, len;
-
+	
 	/* first copy the parameters from user space */
 	memset(psinfo, 0, sizeof(struct elf_prpsinfo));
 
@@ -1533,8 +1533,8 @@ static int fill_psinfo(struct elf_prpsinfo *psinfo, struct task_struct *p,
 	SET_UID(psinfo->pr_uid, from_kuid_munged(cred->user_ns, cred->uid));
 	SET_GID(psinfo->pr_gid, from_kgid_munged(cred->user_ns, cred->gid));
 	rcu_read_unlock();
-	strlcpy(psinfo->pr_fname, p->comm, sizeof(psinfo->pr_fname));
-
+	strncpy(psinfo->pr_fname, p->comm, sizeof(psinfo->pr_fname));
+	
 	return 0;
 }
 

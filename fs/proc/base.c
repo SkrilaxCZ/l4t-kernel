@@ -87,7 +87,6 @@
 #include <linux/slab.h>
 #include <linux/flex_array.h>
 #include <linux/posix-timers.h>
-#include <linux/cpufreq_times.h>
 #ifdef CONFIG_HARDWALL
 #include <asm/hardwall.h>
 #endif
@@ -137,8 +136,6 @@ struct pid_entry {
 	NOD(NAME, (S_IFREG|(MODE)), 			\
 		NULL, &proc_single_file_operations,	\
 		{ .proc_show = show } )
-
-static struct task_struct *next_tid(struct task_struct *start);
 
 /*
  * Count the number of hardlinks for the pid_entry table, excluding the .
@@ -1177,11 +1174,6 @@ static ssize_t oom_adj_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	if (strlen(buffer) > count) {
-		err = -EFAULT;
-		goto out;
-	}
-
 	err = kstrtoint(strstrip(buffer), 0, &oom_adj);
 	if (err)
 		goto out;
@@ -1238,11 +1230,6 @@ static ssize_t oom_score_adj_write(struct file *file, const char __user *buf,
 	if (count > sizeof(buffer) - 1)
 		count = sizeof(buffer) - 1;
 	if (copy_from_user(buffer, buf, count)) {
-		err = -EFAULT;
-		goto out;
-	}
-
-	if (strlen(buffer) > count) {
 		err = -EFAULT;
 		goto out;
 	}
@@ -1387,7 +1374,6 @@ static ssize_t proc_fault_inject_write(struct file * file,
 		count = sizeof(buffer) - 1;
 	if (copy_from_user(buffer, buf, count))
 		return -EFAULT;
-	buffer[PROC_NUMBUF - 1] = '\0';
 	rv = kstrtoint(strstrip(buffer), 0, &make_it_fail);
 	if (rv < 0)
 		return rv;
@@ -2205,7 +2191,7 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
 
 	for (i = 0; i < nr_files; i++) {
 		p = flex_array_get(fa, i);
-		if (p && !proc_fill_cache(file, ctx,
+		if (!proc_fill_cache(file, ctx,
 				      p->name, p->len,
 				      proc_map_files_instantiate,
 				      task,
@@ -2881,192 +2867,6 @@ static const struct file_operations proc_setgroups_operations = {
 };
 #endif /* CONFIG_USER_NS */
 
-#ifdef CONFIG_TASK_WEIGHT
-
-static ssize_t proc_task_weight_read(struct file *file,
-	char __user *buf, size_t count, loff_t *ppos)
-{
-	struct task_struct *task = get_proc_task(file_inode(file));
-	char buffer[PROC_NUMBUF*3];
-	size_t len;
-	struct sched_avg avg;
-	unsigned int curr_cpu;
-
-	if (!task)
-		return -ESRCH;
-
-	task_decayed_load(task, &avg);
-
-	put_task_struct(task);
-
-	curr_cpu = task_cpu(task);
-
-	len = snprintf(buffer, sizeof(buffer), "%i %lu %lu %i\n",
-					avg.weight,
-					avg.load_avg,
-					avg.util_avg,
-					curr_cpu);
-
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static ssize_t proc_task_weight_write(struct file *file,
-	const char __user *buf, size_t count, loff_t *ppos)
-{
-	struct task_struct *task;
-	char buffer[PROC_NUMBUF];
-	int weight;
-	long res;
-
-	memset(buffer, 0, sizeof(buffer));
-	if (count > sizeof(buffer) - 1)
-		count = sizeof(buffer) - 1;
-	if (copy_from_user(buffer, buf, count))
-		return -EFAULT;
-	if (!kstrtol(strstrip(buffer), 0, &res))
-		weight = (int)res;
-	else
-		return -EINVAL;
-	if (weight < 0 || weight > (32<<10))
-		return -EINVAL;
-
-	task = get_proc_task(file_inode(file));
-	if (!task)
-		return -ESRCH;
-	task->se.avg.weight = weight;
-	put_task_struct(task);
-
-	return count;
-}
-
-static const struct file_operations proc_task_weight_operations = {
-	.read		= proc_task_weight_read,
-	.write		= proc_task_weight_write,
-	.llseek		= generic_file_llseek,
-};
-
-#endif /*CONFIG_TASK_WEIGHT*/
-
-#ifdef CONFIG_CGROUP_SCHEDTUNE
-static ssize_t proc_load_read(struct file *file,
-	char __user *buf, size_t count, loff_t *ppos)
-{
-	struct task_struct *task = get_proc_task(file_inode(file));
-	char buffer[PROC_NUMBUF*3];
-	size_t len;
-	struct sched_avg avg;
-	unsigned int curr_cpu;
-
-	if (!task)
-		return -ESRCH;
-
-	task_decayed_load(task, &avg);
-
-	put_task_struct(task);
-
-	curr_cpu = task_cpu(task);
-
-	len = snprintf(buffer, sizeof(buffer), "%d %lu %lu %i\n",
-					task->pid,
-					avg.load_avg,
-					avg.util_avg,
-					curr_cpu);
-
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static const struct file_operations proc_load_operations = {
-	.read		= proc_load_read,
-	.llseek		= generic_file_llseek,
-};
-
-#endif /*CONFIG_CGROUP_SCHEDTUNE*/
-
-
-#if defined(CONFIG_TASK_WEIGHT) || defined(CONFIG_CGROUP_SCHEDTUNE)
-static ssize_t proc_largest_task_read(struct file *file,
-	char __user *buf, size_t count, loff_t *ppos)
-{
-	struct inode *inode = file_inode(file);
-	struct task_struct *ptask = get_proc_task(inode);
-	struct task_struct *ctask;
-	struct sched_avg avg;
-	char buffer[PROC_NUMBUF*5];
-	size_t len;
-
-	/* Initialize largest*/
-	struct largest_task{
-		pid_t pid;
-		unsigned int weight;
-		unsigned long load_avg, util_avg;
-		unsigned int curr_cpu;
-	};
-
-	struct largest_task largest_task = {0, 1024, 0, 0, 0};
-
-	if (!ptask)
-		return -ESRCH;
-
-	ctask = ptask->group_leader;
-
-	if (!ctask) {
-		put_task_struct(ptask);
-		return -ESRCH;
-	}
-
-	get_task_struct(ctask);
-
-	for (; ctask; ctask = next_tid(ctask)) {
-
-		/* find load data of the ctask */
-		task_decayed_load(ctask, &avg);
-
-		/* If the load_avg is greater than 1024 this
-		 * this implies that the scheduler has inflated
-		 * this pid's load_avg time inorder to give
-		 * it higher priority.
-		 * This inflation sometimes occurs when the nice
-		 * value of the pid is lowered below zero. Thus
-		 * ignore this pid so that we may find the
-		 * largest task of the process that is not specially
-		 * handled by the scheduler.
-		 */
-		if (avg.load_avg > 1024)
-			continue;
-
-		/* if load_avg is greater than current largest,
-		 * set this task as the largest task */
-		if (avg.load_avg > largest_task.load_avg) {
-#ifdef CONFIG_TASK_WEIGHT
-			largest_task.weight = avg.weight;
-#endif
-			largest_task.load_avg = avg.load_avg;
-			largest_task.util_avg = avg.util_avg;
-			largest_task.curr_cpu = task_cpu(ctask);
-			largest_task.pid = ctask->pid;
-		}
-
-	}
-
-	len = snprintf(buffer, sizeof(buffer), "%d %i %lu %lu %i\n",
-					largest_task.pid,
-					largest_task.weight,
-					largest_task.load_avg,
-					largest_task.util_avg,
-					largest_task.curr_cpu);
-
-	put_task_struct(ptask);
-
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static const struct file_operations proc_largest_task_operations = {
-	.read		= proc_largest_task_read,
-	.llseek		= generic_file_llseek,
-};
-
-#endif /*CONFIG_TASK_WEIGHT || CONFIG_CGROUP_SCHEDTUNE*/
-
 static int proc_pid_personality(struct seq_file *m, struct pid_namespace *ns,
 				struct pid *pid, struct task_struct *task)
 {
@@ -3177,18 +2977,6 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("timers",	  S_IRUGO, proc_timers_operations),
 #endif
 	REG("timerslack_ns", S_IRUGO|S_IWUGO, proc_pid_set_timerslack_ns_operations),
-#ifdef CONFIG_TASK_WEIGHT
-	REG("weight",	  S_IRUGO|S_IWUSR, proc_task_weight_operations),
-#endif
-#ifdef CONFIG_CGROUP_SCHEDTUNE
-	REG("load",	  S_IRUGO, proc_load_operations),
-#endif
-#if defined(CONFIG_TASK_WEIGHT) || defined(CONFIG_CGROUP_SCHEDTUNE)
-	REG("largest_task", S_IRUGO, proc_largest_task_operations),
-#endif
-#ifdef CONFIG_CPU_FREQ_TIMES
-	ONE("time_in_state", 0444, proc_time_in_state_show),
-#endif
 };
 
 static int proc_tgid_base_readdir(struct file *file, struct dir_context *ctx)
@@ -3572,18 +3360,6 @@ static const struct pid_entry tid_base_stuff[] = {
 	REG("gid_map",    S_IRUGO|S_IWUSR, proc_gid_map_operations),
 	REG("projid_map", S_IRUGO|S_IWUSR, proc_projid_map_operations),
 	REG("setgroups",  S_IRUGO|S_IWUSR, proc_setgroups_operations),
-#endif
-#ifdef CONFIG_TASK_WEIGHT
-	REG("weight",	  S_IRUGO|S_IWUSR, proc_task_weight_operations),
-#endif
-#ifdef CONFIG_CGROUP_SCHEDTUNE
-	REG("load",	  S_IRUGO, proc_load_operations),
-#endif
-#if defined(CONFIG_TASK_WEIGHT) || defined(CONFIG_CGROUP_SCHEDTUNE)
-	REG("largest_task", S_IRUGO, proc_largest_task_operations),
-#endif
-#ifdef CONFIG_CPU_FREQ_TIMES
-	ONE("time_in_state", 0444, proc_time_in_state_show),
 #endif
 };
 

@@ -2094,7 +2094,7 @@ int dquot_file_open(struct inode *inode, struct file *file)
 
 	error = generic_file_open(inode, file);
 	if (!error && (file->f_mode & FMODE_WRITE))
-		error = dquot_initialize(inode);
+		dquot_initialize(inode);
 	return error;
 }
 EXPORT_SYMBOL(dquot_file_open);

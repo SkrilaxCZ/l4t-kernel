@@ -52,12 +52,12 @@ __printf(1, 2) void cifs_vfs_err(const char *fmt, ...);
 #define cifs_dbg(type, fmt, ...)					\
 do {									\
 	if (type == FYI && cifsFYI & CIFS_INFO) {			\
-		printk(KERN_DEBUG "%s: "				\
+		pr_debug_ratelimited("%s: "				\
 			    fmt, __FILE__, ##__VA_ARGS__);		\
 	} else if (type == VFS) {					\
 		cifs_vfs_err(fmt, ##__VA_ARGS__);			\
 	} else if (type == NOISY && type != 0) {			\
-		printk(KERN_DEBUG fmt, ##__VA_ARGS__);		\
+		pr_debug_ratelimited(fmt, ##__VA_ARGS__);		\
 	}								\
 } while (0)
 
@@ -69,7 +69,7 @@ do {									\
 #define cifs_dbg(type, fmt, ...)					\
 do {									\
 	if (0)								\
-		printk(KERN_DEBUG fmt, ##__VA_ARGS__);				\
+		pr_debug(fmt, ##__VA_ARGS__);				\
 } while (0)
 #endif
 

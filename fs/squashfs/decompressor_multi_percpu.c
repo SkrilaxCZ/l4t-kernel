@@ -68,8 +68,7 @@ void squashfs_decompressor_destroy(struct squashfs_sb_info *msblk)
 	if (msblk->stream) {
 		for_each_possible_cpu(cpu) {
 			stream = per_cpu_ptr(percpu, cpu);
-			if (msblk->decompressor)
-				msblk->decompressor->free(stream->stream);
+			msblk->decompressor->free(stream->stream);
 		}
 		free_percpu(percpu);
 	}

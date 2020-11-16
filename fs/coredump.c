@@ -744,7 +744,7 @@ void do_coredump(const siginfo_t *siginfo)
 			goto close_fail;
 		if (!(cprm.file->f_mode & FMODE_CAN_WRITE))
 			goto close_fail;
-		if (do_truncate2(cprm.file->f_path.mnt, cprm.file->f_path.dentry, 0, 0, cprm.file))
+		if (do_truncate(cprm.file->f_path.dentry, 0, 0, cprm.file))
 			goto close_fail;
 	}
 
@@ -761,8 +761,6 @@ void do_coredump(const siginfo_t *siginfo)
 	}
 	if (ispipe && core_pipe_limit)
 		wait_for_dump_helpers(cprm.file);
-	if (cprm.file->f_op->fsync != NULL)
-		cprm.file->f_op->fsync(cprm.file, 0, LLONG_MAX, 0);
 close_fail:
 	if (cprm.file)
 		filp_close(cprm.file, NULL);
