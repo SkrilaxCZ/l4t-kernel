@@ -253,6 +253,42 @@ static struct file_system_type debug_fs_type = {
 };
 MODULE_ALIAS_FS("debugfs");
 
+/**
+ * debugfs_lookup() - look up an existing debugfs file
+ * @name: a pointer to a string containing the name of the file to look up.
+ * @parent: a pointer to the parent dentry of the file.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  If the file
+ * doesn't exist or an error occurs, %NULL will be returned.  The returned
+ * dentry must be passed to dput() when it is no longer needed.
+ *
+ * If debugfs is not enabled in the kernel, the value -%ENODEV will be
+ * returned.
+ */
+struct dentry *debugfs_lookup(const char *name, struct dentry *parent)
+{
+	struct dentry *dentry;
+
+	if (IS_ERR(parent))
+		return NULL;
+
+	if (!parent)
+		parent = debugfs_mount->mnt_root;
+
+	inode_lock(d_inode(parent));
+	dentry = lookup_one_len(name, parent, strlen(name));
+	inode_unlock(d_inode(parent));
+
+	if (IS_ERR(dentry))
+		return NULL;
+	if (!d_really_is_positive(dentry)) {
+		dput(dentry);
+		return NULL;
+	}
+	return dentry;
+}
+EXPORT_SYMBOL_GPL(debugfs_lookup);
+
 static struct dentry *start_creating(const char *name, struct dentry *parent)
 {
 	struct dentry *dentry;
@@ -335,44 +371,6 @@ static struct dentry *__debugfs_create_file(const char *name, umode_t mode,
 	fsnotify_create(d_inode(dentry->d_parent), dentry);
 	return end_creating(dentry);
 }
-
-/**
- * debugfs_create_file - create a file in the debugfs filesystem
- * @name: a pointer to a string containing the name of the file to create.
- * @mode: the permission that the file should have.
- * @parent: a pointer to the parent dentry for this file.  This should be a
- *          directory dentry if set.  If this parameter is NULL, then the
- *          file will be created in the root of the debugfs filesystem.
- * @data: a pointer to something that the caller will want to get to later
- *        on.  The inode.i_private pointer will point to this value on
- *        the open() call.
- * @fops: a pointer to a struct file_operations that should be used for
- *        this file.
- *
- * This is the basic "create a file" function for debugfs.  It allows for a
- * wide range of flexibility in creating a file, or a directory (if you want
- * to create a directory, the debugfs_create_dir() function is
- * recommended to be used instead.)
- *
- * This function will return a pointer to a dentry if it succeeds.  This
- * pointer must be passed to the debugfs_remove() function when the file is
- * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, %NULL will be returned.
- *
- * If debugfs is not enabled in the kernel, the value -%ENODEV will be
- * returned.
- */
-struct dentry *debugfs_create_file(const char *name, umode_t mode,
-				   struct dentry *parent, void *data,
-				   const struct file_operations *fops)
-{
-
-	return __debugfs_create_file(name, mode, parent, data,
-				fops ? &debugfs_full_proxy_file_operations :
-					&debugfs_noop_file_operations,
-				fops);
-}
-EXPORT_SYMBOL_GPL(debugfs_create_file);
 
 /**
  * debugfs_create_file_unsafe - create a file in the debugfs filesystem
