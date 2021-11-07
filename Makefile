@@ -1,3 +1,10 @@
+VERSION = 4
+PATCHLEVEL = 9
+SUBLEVEL = 253
+EXTRAVERSION =
+NAME = Roaring Lionus
+
+# OVERLAYS
 ifeq ($(KERNEL_OVERLAYS),)
 KERNEL_OVERLAYS :=
 KERNEL_OVERLAYS += $(CURDIR)/../nvidia
@@ -17,11 +24,6 @@ define set_srctree_overlay
 endef
 $(foreach overlay,$(KERNEL_OVERLAYS),$(eval $(value set_srctree_overlay)))
 
-VERSION = 4
-PATCHLEVEL = 9
-SUBLEVEL = 253
-EXTRAVERSION =
-NAME = Roaring Lionus
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
