@@ -24,6 +24,12 @@ define set_srctree_overlay
 endef
 $(foreach overlay,$(KERNEL_OVERLAYS),$(eval $(value set_srctree_overlay)))
 
+# EXTRAVERSION adjustment
+# Maintain compilance with SUBLEVEL being lesser than 255
+ifeq ($(shell test $(SUBLEVEL) -gt 254; echo $$?),0)
+  EXTRAVERSION := $(shell expr 254 - $(SUBLEVEL) )
+  SUBLEVEL := 254
+endif
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
