@@ -721,6 +721,12 @@ static int tegra_thermctl_set_trips(void *data, int lo, int hi)
 	r = REG_SET_MASK(r, THERMCTL_LVL0_CPU0_EN_MASK, 0);
 	writel(r, zone->ts->regs + zone->sg->thermctl_lvl0_offset);
 
+	/* Default to our boundaries to prevent verbosity */
+	if (lo == -INT_MAX)
+		lo = min_low_temp;
+	if (hi == INT_MAX)
+		hi = max_high_temp;
+
 	lo = enforce_temp_range(zone->dev, lo) / zone->ts->soc->thresh_grain;
 	hi = enforce_temp_range(zone->dev, hi) / zone->ts->soc->thresh_grain;
 	dev_dbg(zone->dev, "tegra_thermctl_set_trips hi:%d, lo:%d\n", hi, lo);
