@@ -44,6 +44,7 @@ struct usb_conn_info {
 
 	struct power_supply_desc desc;
 	struct power_supply *charger;
+	bool initial_detection;
 };
 
 /*
@@ -88,10 +89,12 @@ static void usb_conn_detect_cable(struct work_struct *work)
 	dev_dbg(info->dev, "role %d/%d, gpios: id %d, vbus %d\n",
 		info->last_role, role, id, vbus);
 
-	if (info->last_role == role) {
+	if (!info->initial_detection && info->last_role == role) {
 		dev_warn(info->dev, "repeated role: %d\n", role);
 		return;
 	}
+
+	info->initial_detection = false;
 
 	if (info->last_role == USB_ROLE_HOST && info->vbus)
 		regulator_disable(info->vbus);
@@ -283,10 +286,12 @@ static int usb_conn_probe(struct platform_device *pdev)
 
 	/* Perform initial detection */
 	if (info->id_gpiod || info->vbus_gpiod) {
+		info->initial_detection = true;
 		usb_conn_queue_dwork(info, 0);
 	} else {
 		dev_info(dev, "Cable %d connected on boot\n",
 				info->init_role);
+		info->initial_detection = false;
 		ret = usb_role_switch_set_role(info->role_sw, info->init_role);
 		if (ret)
 			dev_err(info->dev, "failed to set role: %d\n", ret);
