@@ -28,20 +28,25 @@
 		ethernet@2490000 {
 			status = "okay";
 
-			phy-reset-gpios = <&gpio TEGRA194_MAIN_GPIO(R, 1) GPIO_ACTIVE_LOW>;
+			nvidia,phy-reset-gpio = <&gpio TEGRA194_MAIN_GPIO(R, 1) GPIO_ACTIVE_LOW>;
 			phy-handle = <&phy>;
 			phy-mode = "rgmii-id";
 
 			mdio {
+				compatible = "nvidia,eqos-mdio";
 				#address-cells = <1>;
 				#size-cells = <0>;
 
 				phy: ethernet-phy@0 {
 					compatible = "ethernet-phy-ieee802.3-c22";
-					reg = <0x0>;
+					reg = <0x1>;
 					interrupt-parent = <&gpio>;
 					interrupts = <TEGRA194_MAIN_GPIO(G, 4) IRQ_TYPE_LEVEL_LOW>;
-					#phy-cells = <0>;
+					marvell,copper-mode;
+					/* Setup LED[2] as interrupt pin (active low) */
+					marvell,reg-init = <0x03 0x12 0x7fff 0x880>;
+					nvidia,phy-rst-pdelay-msec = <225>;
+					nvidia,phy-rst-duration-usec = <10000>;
 				};
 			};
 		};

@@ -137,22 +137,44 @@
 					nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				};
 			};
+
+			eqos_mii_rx_input_state_disable: eqos_rx_disable {
+				eqos {
+					nvidia,pins = "eqos_rd0_pe6","eqos_rd1_pe7",
+							"eqos_rd2_pf0","eqos_rd3_pf1",
+							"eqos_rx_ctl_pf2";
+
+					nvidia,enable-input = <TEGRA_PIN_DISABLE>;
+				};
+			};
+
+			eqos_mii_rx_input_state_enable: eqos_rx_enable {
+				eqos {
+					nvidia,pins = "eqos_rd0_pe6","eqos_rd1_pe7",
+							"eqos_rd2_pf0","eqos_rd3_pf1",
+							"eqos_rx_ctl_pf2";
+
+					nvidia,enable-input = <TEGRA_PIN_ENABLE>;
+				};
+			};
 		};
 
 		ethernet@2490000 {
-			compatible = "nvidia,tegra194-eqos",
-				     "nvidia,tegra186-eqos",
-				     "snps,dwc-qos-ethernet-4.10";
+			compatible = "nvidia,tegra194-eqos";
 			reg = <0x0 0x02490000 0x0 0x10000>;
-			interrupts = <GIC_SPI 194 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&bpmp TEGRA194_CLK_AXI_CBB>,
+			reg-names = "mac";
+			interrupts =	<GIC_SPI 194 IRQ_TYPE_LEVEL_HIGH>,    /* common */
+				<GIC_SPI 186 IRQ_TYPE_LEVEL_HIGH>,    /* tx0 */
+				<GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>;    /* rx0 */
+			clocks = <&bpmp TEGRA194_CLK_PLLREFE_VCOOUT>,
 				 <&bpmp TEGRA194_CLK_EQOS_AXI>,
 				 <&bpmp TEGRA194_CLK_EQOS_RX>,
+				 <&bpmp TEGRA194_CLK_EQOS_PTP_REF>,
 				 <&bpmp TEGRA194_CLK_EQOS_TX>,
-				 <&bpmp TEGRA194_CLK_EQOS_PTP_REF>;
-			clock-names = "master_bus", "slave_bus", "rx", "tx", "ptp_ref";
+				 <&bpmp TEGRA194_CLK_AXI_CBB>;
+			clock-names = "pllrefe_vcoout", "eqos_axi", "eqos_rx", "eqos_ptp_ref", "eqos_tx", "axi_cbb";
 			resets = <&bpmp TEGRA194_RESET_EQOS>;
-			reset-names = "eqos";
+			reset-names = "mac";
 			interconnects = <&mc TEGRA194_MEMORY_CLIENT_EQOSR &emc>,
 					<&mc TEGRA194_MEMORY_CLIENT_EQOSW &emc>;
 			interconnect-names = "dma-mem", "write";
@@ -164,6 +186,46 @@
 			snps,burst-map = <0x7>;
 			snps,txpbl = <16>;
 			snps,rxpbl = <8>;
+
+			nvidia,rxq_enable_ctrl = <2>;
+			nvidia,num-dma-chans = <1>;
+			nvidia,dma-chans = <0>;
+			nvidia,num-mtl-queues = <1>;
+			nvidia,mtl-queues = <0>;
+			nvidia,rx-queue-prio = <0x2>;
+			nvidia,tx-queue-prio = <0x0>;
+			nvidia,slot_num_check = <0x0 0x0 0x0 0x0>;
+			nvidia,slot_intvl_vals = <0x0 0x7D 0x7D 0x7D>;
+			nvidia,dcs-enable = <0x1>;
+			nvidia,pad_calibration = <0x1>;
+			nvidia,pause_frames = <1>;
+			nvidia,max-platform-mtu = <16383>;
+			nvidia,pad_auto_cal_pd_offset = <0>;
+			nvidia,pad_auto_cal_pu_offset = <0>;
+
+			nvidia,dma_rx_ring_sz = <1024>;
+			nvidia,dma_tx_ring_sz = <1024>;
+			dma-coherent;
+
+			/* usec value for Rx watchdog interrupt */
+			nvidia,rx_riwt = <256>;
+			nvidia,rx_frames = <64>;
+			nvidia,tx_usecs = <256>;
+			nvidia,tx_frames = <5>;
+			/* PTP_ref clock speed in Hz (312.5 MHz)*/
+			nvidia,ptp_ref_clock_speed = <312500000>;
+
+			pinctrl-names = "mii_rx_disable", "mii_rx_enable";
+			pinctrl-0 = <&eqos_mii_rx_input_state_disable>;
+			pinctrl-1 = <&eqos_mii_rx_input_state_enable>;
+		};
+
+		actmon@d230000 {
+			compatible = "nvidia,tegra194-cactmon-mc-all";
+			reg = <0x00 0xd230000 0x00 0x1000>;
+			clocks = <&bpmp TEGRA194_CLK_ACTMON>;
+			clock-names = "actmon";
+			status = "okay";
 		};
 
 		gpcdma: dma-controller@2600000 {
@@ -798,17 +860,22 @@
 
 		gen1_i2c: i2c@3160000 {
 			compatible = "nvidia,tegra194-i2c";
-			reg = <0x0 0x03160000 0x0 0x10000>;
+			reg = <0x0 0x03160000 0x0 0x100>;
 			interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			clocks = <&bpmp TEGRA194_CLK_I2C1>;
-			clock-names = "div-clk";
+			clocks = <&bpmp TEGRA194_CLK_I2C1
+				&bpmp TEGRA194_CLK_PLLP_OUT0>;
+			clock-frequency = <400000>;
+			clock-names = "div-clk", "parent";
 			resets = <&bpmp TEGRA194_RESET_I2C1>;
 			reset-names = "i2c";
 			dmas = <&gpcdma 21>, <&gpcdma 21>;
 			dma-names = "rx", "tx";
 			status = "disabled";
+
+			dma-coherent;
+			nvidia,hw-instance-id = <0x0>;
 		};
 
 		uarth: serial@3170000 {
@@ -1582,17 +1649,21 @@
 
 		gen2_i2c: i2c@c240000 {
 			compatible = "nvidia,tegra194-i2c";
-			reg = <0x0 0x0c240000 0x0 0x10000>;
+			reg = <0x0 0x0c240000 0x0 0x100>;
 			interrupts = <GIC_SPI 26 IRQ_TYPE_LEVEL_HIGH>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			clocks = <&bpmp TEGRA194_CLK_I2C2>;
-			clock-names = "div-clk";
+			clocks = <&bpmp TEGRA194_CLK_I2C2
+				&bpmp TEGRA194_CLK_PLLP_OUT0>;
+			clock-names = "div-clk", "parent";
 			resets = <&bpmp TEGRA194_RESET_I2C2>;
 			reset-names = "i2c";
 			dmas = <&gpcdma 22>, <&gpcdma 22>;
 			dma-names = "rx", "tx";
 			status = "disabled";
+
+			dma-coherent;
+			nvidia,hw-instance-id = <0x1>;
 		};
 
 		gen8_i2c: i2c@c250000 {
@@ -1884,16 +1955,19 @@
 			status = "okay";
 		};
 
-		host1x@13e00000 {
-			compatible = "nvidia,tegra194-host1x";
-			reg = <0x0 0x13e00000 0x0 0x10000>,
-			      <0x0 0x13e10000 0x0 0x10000>;
-			reg-names = "hypervisor", "vm";
+		host1x: host1x@13e00000 {
+			compatible = "nvidia,tegra194-host1x", "simple-bus";
+			reg = <0x0 0x13e10000 0x0 0x00010000>,
+				<0x0 0x13e00000 0x0 0x00010000>,
+				<0x0 0x13ec0000 0x0 0x00060000>,
+				<0x0 0x60000000 0x0 0x00400000>;
+			reg-names = "guest", "hypervisor", "actmon", "sem-syncpt-shim";
 			interrupts = <GIC_SPI 265 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 263 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "syncpt", "host1x";
-			clocks = <&bpmp TEGRA194_CLK_HOST1X>;
-			clock-names = "host1x";
+			clocks = <&bpmp TEGRA194_CLK_HOST1X
+				&bpmp TEGRA194_CLK_ACTMON>;
+			clock-names = "host1x", "actmon";
 			resets = <&bpmp TEGRA194_RESET_HOST1X>;
 			reset-names = "host1x";
 
@@ -1915,6 +1989,9 @@
 				    <5 &smmu TEGRA194_SID_HOST1X_CTX5 1>,
 				    <6 &smmu TEGRA194_SID_HOST1X_CTX6 1>,
 				    <7 &smmu TEGRA194_SID_HOST1X_CTX7 1>;
+
+			nvidia,ignore-dt-update;
+			nvidia,vmid = <1>;
 
 			nvdec@15140000 {
 				compatible = "nvidia,tegra194-nvdec";
@@ -2355,7 +2432,7 @@
 		};
 
 		pcie@14100000 {
-			compatible = "nvidia,tegra194-pcie";
+			compatible = "nvidia,tegra194-pcie", "snps,dw-pcie";
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_PCIEX1A>;
 			reg = <0x00 0x14100000 0x0 0x00020000>, /* appl registers (128K)      */
 			      <0x00 0x30000000 0x0 0x00040000>, /* configuration space (256K) */
@@ -2371,8 +2448,9 @@
 			num-lanes = <1>;
 			linux,pci-domain = <1>;
 
-			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_1>;
-			clock-names = "core";
+			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_1>,
+				<&bpmp TEGRA194_CLK_PEX0_CORE_1M>;
+			clock-names = "core", "core_m";
 
 			resets = <&bpmp TEGRA194_RESET_PEX0_CORE_1_APB>,
 				 <&bpmp TEGRA194_RESET_PEX0_CORE_1>;
@@ -2404,10 +2482,29 @@
 			iommu-map = <0x0 &smmu TEGRA194_SID_PCIE1 0x1000>;
 			iommu-map-mask = <0x0>;
 			dma-coherent;
+			
+			nvidia,dvfs-tbl = < 204000000 408000000 800000000  1333000000
+							0         0         0          0
+							0         0         0          0
+							0         0         0          0 >;
+
+			nvidia,max-speed = <4>;
+			nvidia,disable-aspm-states = <0xf>;
+			nvidia,host1x = <&host1x>;
+			nvidia,disable-l1-cpm;
+			nvidia,aux-clk-freq = <0x13>;
+			nvidia,preset-init = <0x5>;
+			
+			nvidia,cfg-link-cap-l1sub = <0x194>;
+			nvidia,cap-pl16g-status = <0x164>;
+			nvidia,cap-pl16g-cap-off = <0x178>;
+			nvidia,event-cntr-ctrl = <0x1a8>;
+			nvidia,event-cntr-data = <0x1ac>;
+			nvidia,dl-feature-cap = <0x2dc>;
 		};
 
 		pcie@14120000 {
-			compatible = "nvidia,tegra194-pcie";
+			compatible = "nvidia,tegra194-pcie", "snps,dw-pcie";
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_PCIEX1A>;
 			reg = <0x00 0x14120000 0x0 0x00020000>, /* appl registers (128K)      */
 			      <0x00 0x32000000 0x0 0x00040000>, /* configuration space (256K) */
@@ -2423,8 +2520,9 @@
 			num-lanes = <1>;
 			linux,pci-domain = <2>;
 
-			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_2>;
-			clock-names = "core";
+			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_2>,
+				<&bpmp TEGRA194_CLK_PEX0_CORE_2M>;
+			clock-names = "core", "core_m";
 
 			resets = <&bpmp TEGRA194_RESET_PEX0_CORE_2_APB>,
 				 <&bpmp TEGRA194_RESET_PEX0_CORE_2>;
@@ -2456,10 +2554,28 @@
 			iommu-map = <0x0 &smmu TEGRA194_SID_PCIE2 0x1000>;
 			iommu-map-mask = <0x0>;
 			dma-coherent;
+			
+			nvidia,dvfs-tbl = < 204000000 408000000 800000000  1333000000
+							0         0         0          0
+							0         0         0          0
+							0         0         0          0 >;
+
+			nvidia,max-speed = <4>;
+			nvidia,disable-aspm-states = <0xf>;
+			nvidia,disable-l1-cpm;
+			nvidia,aux-clk-freq = <0x13>;
+			nvidia,preset-init = <0x5>;
+			
+			nvidia,cfg-link-cap-l1sub = <0x194>;
+			nvidia,cap-pl16g-status = <0x164>;
+			nvidia,cap-pl16g-cap-off = <0x178>;
+			nvidia,event-cntr-ctrl = <0x1a8>;
+			nvidia,event-cntr-data = <0x1ac>;
+			nvidia,dl-feature-cap = <0x2dc>;
 		};
 
 		pcie@14140000 {
-			compatible = "nvidia,tegra194-pcie";
+			compatible = "nvidia,tegra194-pcie", "snps,dw-pcie";
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_PCIEX1A>;
 			reg = <0x00 0x14140000 0x0 0x00020000>, /* appl registers (128K)      */
 			      <0x00 0x34000000 0x0 0x00040000>, /* configuration space (256K) */
@@ -2475,8 +2591,9 @@
 			num-lanes = <1>;
 			linux,pci-domain = <3>;
 
-			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_3>;
-			clock-names = "core";
+			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_3>,
+				<&bpmp TEGRA194_CLK_PEX0_CORE_3M>;
+			clock-names = "core", "core_m";
 
 			resets = <&bpmp TEGRA194_RESET_PEX0_CORE_3_APB>,
 				 <&bpmp TEGRA194_RESET_PEX0_CORE_3>;
@@ -2508,10 +2625,28 @@
 			iommu-map = <0x0 &smmu TEGRA194_SID_PCIE3 0x1000>;
 			iommu-map-mask = <0x0>;
 			dma-coherent;
+			
+			nvidia,dvfs-tbl = < 204000000 408000000 800000000  1333000000
+							0         0         0          0
+							0         0         0          0
+							0         0         0          0 >;
+
+			nvidia,max-speed = <4>;
+			nvidia,disable-aspm-states = <0xf>;
+			nvidia,disable-l1-cpm;
+			nvidia,aux-clk-freq = <0x13>;
+			nvidia,preset-init = <0x5>;
+			
+			nvidia,cfg-link-cap-l1sub = <0x194>;
+			nvidia,cap-pl16g-status = <0x164>;
+			nvidia,cap-pl16g-cap-off = <0x178>;
+			nvidia,event-cntr-ctrl = <0x1a8>;
+			nvidia,event-cntr-data = <0x1ac>;
+			nvidia,dl-feature-cap = <0x2dc>;
 		};
 
 		pcie@14160000 {
-			compatible = "nvidia,tegra194-pcie";
+			compatible = "nvidia,tegra194-pcie", "snps,dw-pcie";
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_PCIEX4A>;
 			reg = <0x00 0x14160000 0x0 0x00020000>, /* appl registers (128K)      */
 			      <0x00 0x36000000 0x0 0x00040000>, /* configuration space (256K) */
@@ -2527,8 +2662,9 @@
 			num-lanes = <4>;
 			linux,pci-domain = <4>;
 
-			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_4>;
-			clock-names = "core";
+			clocks = <&bpmp TEGRA194_CLK_PEX0_CORE_4>,
+				<&bpmp TEGRA194_CLK_PEX0_CORE_4M>;
+			clock-names = "core", "core_m";
 
 			resets = <&bpmp TEGRA194_RESET_PEX0_CORE_4_APB>,
 				 <&bpmp TEGRA194_RESET_PEX0_CORE_4>;
@@ -2560,6 +2696,24 @@
 			iommu-map = <0x0 &smmu TEGRA194_SID_PCIE4 0x1000>;
 			iommu-map-mask = <0x0>;
 			dma-coherent;
+			
+			nvidia,dvfs-tbl = < 204000000 204000000 204000000  408000000
+							204000000 204000000 408000000  800000000
+							204000000 408000000 800000000  1600000000
+							0         0         0          0 >;
+
+			nvidia,max-speed = <4>;
+			nvidia,disable-aspm-states = <0xf>;
+			nvidia,disable-l1-cpm;
+			nvidia,aux-clk-freq = <0x13>;
+			nvidia,preset-init = <0x5>;
+			
+			nvidia,cfg-link-cap-l1sub = <0x1b0>;
+			nvidia,cap-pl16g-status = <0x174>;
+			nvidia,cap-pl16g-cap-off = <0x188>;
+			nvidia,event-cntr-ctrl = <0x1c4>;
+			nvidia,event-cntr-data = <0x1c8>;
+			nvidia,dl-feature-cap = <0x2f8>;
 		};
 
 		pcie-ep@14160000 {
@@ -2693,7 +2847,7 @@
 		};
 
 		pcie@141a0000 {
-			compatible = "nvidia,tegra194-pcie";
+			compatible = "nvidia,tegra194-pcie", "snps,dw-pcie";
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_PCIEX8A>;
 			reg = <0x00 0x141a0000 0x0 0x00020000>, /* appl registers (128K)      */
 			      <0x00 0x3a000000 0x0 0x00040000>, /* configuration space (256K) */
@@ -2712,8 +2866,9 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&pex_rst_c5_out_state>, <&pex_clkreq_c5_bi_dir_state>;
 
-			clocks = <&bpmp TEGRA194_CLK_PEX1_CORE_5>;
-			clock-names = "core";
+			clocks = <&bpmp TEGRA194_CLK_PEX1_CORE_5>,
+				<&bpmp TEGRA194_CLK_PEX1_CORE_5M>;
+			clock-names = "core", "core_m";
 
 			resets = <&bpmp TEGRA194_RESET_PEX1_CORE_5_APB>,
 				 <&bpmp TEGRA194_RESET_PEX1_CORE_5>;
@@ -2745,6 +2900,25 @@
 			iommu-map = <0x0 &smmu TEGRA194_SID_PCIE5 0x1000>;
 			iommu-map-mask = <0x0>;
 			dma-coherent;
+			
+			nvidia,dvfs-tbl = < 204000000 204000000 204000000  408000000
+							204000000 204000000 408000000  666000000
+							204000000 408000000 666000000  1066000000
+							408000000 666000000 1066000000 2133000000 >;
+
+			nvidia,max-speed = <4>;
+			nvidia,disable-aspm-states = <0xf>;
+			nvidia,tsa-config = <0x0200b004>;
+			nvidia,disable-l1-cpm;
+			nvidia,aux-clk-freq = <0x13>;
+			nvidia,preset-init = <0x5>;
+			
+			nvidia,cfg-link-cap-l1sub = <0x1c4>;
+			nvidia,cap-pl16g-status = <0x174>;
+			nvidia,cap-pl16g-cap-off = <0x188>;
+			nvidia,event-cntr-ctrl = <0x1d8>;
+			nvidia,event-cntr-data = <0x1dc>;
+			nvidia,dl-feature-cap = <0x30c>;
 		};
 
 		pcie-ep@141a0000 {
@@ -2792,7 +2966,8 @@
 		gpu@17000000 {
 			compatible = "nvidia,gv11b";
 			reg = <0x0 0x17000000 0x0 0x1000000>,
-			      <0x0 0x18000000 0x0 0x1000000>;
+			      <0x0 0x18000000 0x0 0x1000000>,
+			      <0x0 0x03b41000 0x0 0x0001000>;
 			interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 71 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "stall", "nonstall";
@@ -2803,6 +2978,11 @@
 			resets = <&bpmp TEGRA194_RESET_GPU>;
 			reset-names = "gpu";
 			dma-coherent;
+			dma-noncontig;
+			access-vpr-phys;
+
+			nvidia,host1x = <&host1x>;
+			nvidia,bpmp = <&bpmp>;
 
 			power-domains = <&bpmp TEGRA194_POWER_DOMAIN_GPU>;
 			interconnects = <&mc TEGRA194_MEMORY_CLIENT_NVL1R &emc>,
@@ -2821,6 +3001,7 @@
 					     "read-1", "read-1-hp", "write-1",
 					     "read-2", "read-2-hp", "write-2",
 					     "read-3", "read-3-hp", "write-3";
+			status = "disabled";
 		};
 	};
 
