@@ -170,6 +170,9 @@ x509.genkey
 # Kdevelop4
 *.kdev4
 
+# CLion
+*.idea
+
 # Clang's compilation database file
 /compile_commands.json
 
