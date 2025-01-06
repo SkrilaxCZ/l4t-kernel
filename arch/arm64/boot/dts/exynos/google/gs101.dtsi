@@ -448,6 +448,7 @@
 		pinctrl_gsacore: pinctrl@17a80000 {
 			compatible = "google,gs101-pinctrl";
 			reg = <0x17a80000 0x00001000>;
+			status = "disabled";
 		};
 
 		cmu_top: clock-controller@1e080000 {
