@@ -826,10 +826,10 @@ int hibernate(void)
  */
 int hibernate_quiet_exec(int (*func)(void *data), void *data)
 {
-	unsigned int sleep_flags;
 	int error;
 
-	sleep_flags = lock_system_sleep();
+	if (!mutex_trylock(&system_transition_mutex))
+		return -EBUSY;
 
 	if (!hibernate_acquire()) {
 		error = -EBUSY;
@@ -909,7 +909,7 @@ restore:
 	hibernate_release();
 
 unlock:
-	unlock_system_sleep(sleep_flags);
+	mutex_unlock(&system_transition_mutex);
 
 	return error;
 }
