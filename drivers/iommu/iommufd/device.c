@@ -468,6 +468,17 @@ err_unresv:
 	return rc;
 }
 
+/* Check if idev is attached to igroup->hwpt */
+static bool iommufd_device_is_attached(struct iommufd_device *idev)
+{
+	struct iommufd_device *cur;
+
+	list_for_each_entry(cur, &idev->igroup->device_list, group_item)
+		if (cur == idev)
+			return true;
+	return false;
+}
+
 static struct iommufd_hw_pagetable *
 iommufd_device_do_replace(struct iommufd_device *idev,
 			  struct iommufd_hw_pagetable *hwpt)
@@ -480,6 +491,11 @@ iommufd_device_do_replace(struct iommufd_device *idev,
 	mutex_lock(&idev->igroup->lock);
 
 	if (igroup->hwpt == NULL) {
+		rc = -EINVAL;
+		goto err_unlock;
+	}
+
+	if (!iommufd_device_is_attached(idev)) {
 		rc = -EINVAL;
 		goto err_unlock;
 	}
