@@ -1658,7 +1658,6 @@ int btrfs_load_block_group_zone_info(struct btrfs_block_group *cache, bool new)
 		 * stripe.
 		 */
 		cache->alloc_offset = cache->zone_capacity;
-		ret = 0;
 	}
 
 out:
