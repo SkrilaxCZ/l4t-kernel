@@ -223,6 +223,13 @@ int xe_gt_tlb_invalidation_guc(struct xe_gt *gt)
 				     ARRAY_SIZE(action));
 }
 
+/*
+ * Ensure that roundup_pow_of_two(length) doesn't overflow.
+ * Note that roundup_pow_of_two() operates on unsigned long,
+ * not on u64.
+ */
+#define MAX_RANGE_TLB_INVALIDATION_LENGTH (rounddown_pow_of_two(ULONG_MAX))
+
 /**
  * xe_gt_tlb_invalidation_vma - Issue a TLB invalidation on this GT for a VMA
  * @gt: graphics tile
@@ -245,6 +252,7 @@ int xe_gt_tlb_invalidation_vma(struct xe_gt *gt,
 	struct xe_device *xe = gt_to_xe(gt);
 #define MAX_TLB_INVALIDATION_LEN	7
 	u32 action[MAX_TLB_INVALIDATION_LEN];
+	u64 length = xe_vma_size(vma);
 	int len = 0;
 
 	xe_gt_assert(gt, vma);
@@ -259,11 +267,11 @@ int xe_gt_tlb_invalidation_vma(struct xe_gt *gt,
 
 	action[len++] = XE_GUC_ACTION_TLB_INVALIDATION;
 	action[len++] = 0; /* seqno, replaced in send_tlb_invalidation */
-	if (!xe->info.has_range_tlb_invalidation) {
+	if (!xe->info.has_range_tlb_invalidation ||
+	    length > MAX_RANGE_TLB_INVALIDATION_LENGTH) {
 		action[len++] = MAKE_INVAL_OP(XE_GUC_TLB_INVAL_FULL);
 	} else {
 		u64 start = xe_vma_start(vma);
-		u64 length = xe_vma_size(vma);
 		u64 align, end;
 
 		if (length < SZ_4K)
