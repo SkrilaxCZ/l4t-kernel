@@ -604,5 +604,11 @@ struct iommu_domain *arm_smmu_sva_domain_alloc(void)
 		return NULL;
 	domain->ops = &arm_smmu_sva_domain_ops;
 
+	/*
+	 * Choose page_size as the leaf page size for invalidation when
+	 * ARM_SMMU_FEAT_RANGE_INV is present
+	 */
+	domain->pgsize_bitmap = PAGE_SIZE;
+
 	return domain;
 }
