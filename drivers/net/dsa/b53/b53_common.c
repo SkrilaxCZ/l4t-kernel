@@ -565,6 +565,18 @@ static void b53_port_set_learning(struct b53_device *dev, int port,
 	b53_write16(dev, B53_CTRL_PAGE, B53_DIS_LEARNING, reg);
 }
 
+int b53_setup_port(struct dsa_switch *ds, int port)
+{
+	struct b53_device *dev = ds->priv;
+
+	b53_port_set_ucast_flood(dev, port, true);
+	b53_port_set_mcast_flood(dev, port, true);
+	b53_port_set_learning(dev, port, false);
+
+	return 0;
+}
+EXPORT_SYMBOL(b53_setup_port);
+
 int b53_enable_port(struct dsa_switch *ds, int port, struct phy_device *phy)
 {
 	struct b53_device *dev = ds->priv;
@@ -576,10 +588,6 @@ int b53_enable_port(struct dsa_switch *ds, int port, struct phy_device *phy)
 		return 0;
 
 	cpu_port = dsa_to_port(ds, port)->cpu_dp->index;
-
-	b53_port_set_ucast_flood(dev, port, true);
-	b53_port_set_mcast_flood(dev, port, true);
-	b53_port_set_learning(dev, port, false);
 
 	if (dev->ops->irq_enable)
 		ret = dev->ops->irq_enable(dev, port);
@@ -711,10 +719,6 @@ static void b53_enable_cpu_port(struct b53_device *dev, int port)
 	b53_write8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), port_ctrl);
 
 	b53_brcm_hdr_setup(dev->ds, port);
-
-	b53_port_set_ucast_flood(dev, port, true);
-	b53_port_set_mcast_flood(dev, port, true);
-	b53_port_set_learning(dev, port, false);
 }
 
 static void b53_enable_mib(struct b53_device *dev)
@@ -2396,6 +2400,7 @@ static const struct dsa_switch_ops b53_switch_ops = {
 	.phylink_mac_config	= b53_phylink_mac_config,
 	.phylink_mac_link_down	= b53_phylink_mac_link_down,
 	.phylink_mac_link_up	= b53_phylink_mac_link_up,
+	.port_setup		= b53_setup_port,
 	.port_enable		= b53_enable_port,
 	.port_disable		= b53_disable_port,
 	.get_mac_eee		= b53_get_mac_eee,
