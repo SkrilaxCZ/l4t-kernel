@@ -1543,6 +1543,9 @@ int b53_vlan_add(struct dsa_switch *ds, int port,
 	if (vlan->vid == 0 && vlan->vid == b53_default_pvid(dev))
 		untagged = true;
 
+	if (vlan->vid > 0 && dsa_is_cpu_port(ds, port))
+		untagged = false;
+
 	vl->members |= BIT(port);
 	if (untagged && !b53_vlan_port_needs_forced_tagged(ds, port))
 		vl->untag |= BIT(port);
