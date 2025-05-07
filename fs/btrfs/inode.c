@@ -1117,6 +1117,7 @@ static void submit_one_async_extent(struct async_chunk *async_chunk,
 	struct page *locked_page = NULL;
 	struct extent_map *em;
 	int ret = 0;
+	bool free_pages = false;
 	u64 start = async_extent->start;
 	u64 end = async_extent->start + async_extent->ram_size - 1;
 
@@ -1137,7 +1138,10 @@ static void submit_one_async_extent(struct async_chunk *async_chunk,
 	lock_extent(io_tree, start, end, NULL);
 
 	if (async_extent->compress_type == BTRFS_COMPRESS_NONE) {
+		ASSERT(!async_extent->pages);
+		ASSERT(async_extent->nr_pages == 0);
 		submit_uncompressed_range(inode, async_extent, locked_page);
+		free_pages = true;
 		goto done;
 	}
 
@@ -1153,6 +1157,7 @@ static void submit_one_async_extent(struct async_chunk *async_chunk,
 		 * fall back to uncompressed.
 		 */
 		submit_uncompressed_range(inode, async_extent, locked_page);
+		free_pages = true;
 		goto done;
 	}
 
@@ -1199,6 +1204,8 @@ static void submit_one_async_extent(struct async_chunk *async_chunk,
 done:
 	if (async_chunk->blkcg_css)
 		kthread_associate_blkcg(NULL);
+	if (free_pages)
+		free_async_extent_pages(async_extent);
 	kfree(async_extent);
 	return;
 
