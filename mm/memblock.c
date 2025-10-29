@@ -460,14 +460,7 @@ static int __init_memblock memblock_double_array(struct memblock_type *type,
 				min(new_area_start, memblock.current_limit),
 				new_alloc_size, PAGE_SIZE);
 
-		if (addr) {
-			/* The memory may not have been accepted, yet. */
-			accept_memory(addr, new_alloc_size);
-
-			new_array = __va(addr);
-		} else {
-			new_array = NULL;
-		}
+		new_array = addr ? __va(addr) : NULL;
 	}
 	if (!addr) {
 		pr_err("memblock: Failed to double %s array from %ld to %ld entries !\n",
